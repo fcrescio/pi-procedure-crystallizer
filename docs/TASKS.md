@@ -11,8 +11,8 @@
 
 ## Goal 2 — Add user governance
 
-- [ ] Implement `/tools review` with provenance, usage, validation state, and risks.
-- [ ] Implement `/tools test <name>` with bounded deterministic examples.
+- [x] Implement `/tools review` with provenance, usage, validation state, and risks.
+- [x] Implement `/tools test <name>` with bounded deterministic examples.
 - [ ] Test delete, review, and promotion confirmation paths.
 - [ ] Preserve the explicit-promotion invariant in unit and integration tests.
 

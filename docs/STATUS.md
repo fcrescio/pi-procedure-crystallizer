@@ -9,6 +9,8 @@ Working now:
 - `/tools-create-demo` creates a deterministic `session_echo` session artifact and registers it immediately;
 - `/tools list` lists current-session artifacts and globally promoted artifacts separately;
 - `/tools inspect <name>` shows the manifest, provenance, and artifact directory;
+- `/tools review` shows runtime support, provenance, declared side effects, dependencies, secret declaration, and artifact location;
+- `/tools test <name>` runs a bounded deterministic smoke test for supported runtimes;
 - `/tools delete <name>` requires confirmation, deletes only the session artifact, and disables the active tool;
 - `/tools promote <name>` requires explicit confirmation and copies the artifact into the separate global store;
 - `session_start` restores global tools and tools belonging to the exact `SessionManager.getSessionId()`;
@@ -59,4 +61,4 @@ Call session_echo with text exactly global-ok, and no other tool.
 
 ## Next smallest task
 
-Extend the harness with process restart/resume and a fresh-session assertion, then implement `/tools review` and `/tools test <name>` as the next governance slice.
+Extend the harness with process restart/resume and a fresh-session assertion, then add the first safe declarative crystallization runtime.

@@ -38,15 +38,17 @@ function demoTool(tool: StoredTool): ToolDefinition<typeof DEMO_PARAMETERS> {
     description: tool.manifest.description,
     promptSnippet: "Echo text through a deterministic session-scoped demo tool",
     parameters: DEMO_PARAMETERS,
-    async execute(_toolCallId, params: DemoParameters) {
-      return {
-        content: [{ type: "text", text: `session_echo: ${params.text}` }],
-        details: {
-          artifactId: tool.manifest.id,
-          scope: tool.manifest.scope,
-          originSession: tool.manifest.origin.sessionKey,
-        },
-      };
+    async execute(_toolCallId, params: DemoParameters) { return executeDemo(tool, params.text); },
+  };
+}
+
+function executeDemo(tool: StoredTool, text: string) {
+  return {
+    content: [{ type: "text" as const, text: `session_echo: ${text}` }],
+    details: {
+      artifactId: tool.manifest.id,
+      scope: tool.manifest.scope,
+      originSession: tool.manifest.origin.sessionKey,
     },
   };
 }
@@ -54,6 +56,22 @@ function demoTool(tool: StoredTool): ToolDefinition<typeof DEMO_PARAMETERS> {
 function formatTool(tool: StoredTool): string {
   const { manifest } = tool;
   return `${manifest.name} [${manifest.scope}] — ${manifest.description} — ${tool.directory}`;
+}
+
+function formatReview(tool: StoredTool): string {
+  const { manifest } = tool;
+  const runnable = isDemoTool(tool) ? "runnable" : "unsupported-runtime";
+  const effects = manifest.safety.declaredSideEffects.length > 0 ? manifest.safety.declaredSideEffects.join(", ") : "none";
+  const dependencies = manifest.runtime.dependencies?.join(", ") || "none";
+  return [
+    `${manifest.name} [${manifest.scope}] — ${runnable}`,
+    `  description: ${manifest.description}`,
+    `  origin: ${manifest.origin.trigger} / ${manifest.origin.sessionKey}`,
+    `  side effects: ${effects}`,
+    `  dependencies: ${dependencies}`,
+    `  secrets: ${manifest.safety.containsSecrets ? "declared" : "none declared"}`,
+    `  artifact: ${tool.directory}`,
+  ].join("\n");
 }
 
 async function notifyList(ctx: ExtensionCommandContext, store: ArtifactStore, sessionKey: string): Promise<void> {
@@ -124,6 +142,30 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
           await notifyList(ctx, store, sessionKey);
           return;
         }
+        if (command === "review") {
+          const sessionTools = await store.listSession(sessionKey);
+          const globalTools = await store.listGlobal();
+          const tools = [...sessionTools, ...globalTools];
+          ctx.ui.notify(
+            tools.length > 0 ? tools.map(formatReview).join("\n\n") : "No session or global tools to review.",
+            "info",
+          );
+          return;
+        }
+        if (command === "test" && name) {
+          let tool: StoredTool;
+          try {
+            tool = await store.readSession(sessionKey, name);
+          } catch {
+            const global = (await store.listGlobal()).find((candidate) => candidate.manifest.name === name);
+            if (!global) throw new Error(`Tool not found: ${name}`);
+            tool = global;
+          }
+          if (!isDemoTool(tool)) throw new Error(`Tool ${name} has no supported deterministic test runtime`);
+          const result = executeDemo(tool, "tools-test");
+          ctx.ui.notify(`Test passed for ${name}: ${result.content[0]?.type === "text" ? result.content[0].text : "ok"}`, "info");
+          return;
+        }
         if (command === "inspect" && name) {
           const tool = await store.readSession(sessionKey, name);
           ctx.ui.notify(JSON.stringify({ ...tool.manifest, artifactDirectory: tool.directory }, null, 2), "info");
@@ -152,7 +194,7 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
           }
           return;
         }
-        ctx.ui.notify("Usage: /tools list | inspect <name> | delete <name> | promote <name>", "warning");
+        ctx.ui.notify("Usage: /tools list | review | test <name> | inspect <name> | delete <name> | promote <name>", "warning");
       } catch (error) {
         ctx.ui.notify(`Tools command failed: ${String(error)}`, "error");
       }
