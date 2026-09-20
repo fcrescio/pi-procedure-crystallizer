@@ -2,6 +2,13 @@
 
 ## Current state
 
+The main package is now prepared for an initial public npm release as
+`pi-session-tools@0.1.0`: its README describes the shipped behavior, the Pi
+manifest declares both the extension and workflow skill, and `npm pack
+--dry-run` contains only runtime code and public documentation. The companion
+`pi-compaction-recovery@0.1.0` package lives in the standalone repository at
+`/home/fcrescio/pi-compaction-recovery` and has its own release check.
+
 The first lifecycle vertical slice is implemented against Pi `0.84.4`, without LLM reflection or generated source execution.
 
 Working now:
@@ -14,18 +21,18 @@ Working now:
 - `/tools delete <name>` requires confirmation, deletes only the session artifact, and disables the active tool;
 - `/tools promote <name>` requires explicit confirmation and copies the artifact into the separate global store;
 - `session_start` restores global tools and tools belonging to the exact `SessionManager.getSessionId()`;
-- `session_before_compact` runs a bounded explicit-request crystallizer and returns nothing, leaving Pi's native compaction in control. It scans at most 64 recent entries, accepts only prior `session_tool_create` calls, materializes only the read-only fixture runtime after path/file/size checks, and skips overflow/cancelled work;
+- `session_before_compact` runs bounded crystallization and returns nothing, leaving Pi's native compaction in control. It scans at most 64 recent entries, recovers explicit `session_tool_create` calls, and discovers repeated safe read-only procedures; explicit fixture recovery remains skipped on overflow while bounded native runtimes may still be materialized there.
 - `session_tool_create` lets the agent create a read-only `fixture_inventory` tool in the current session; it never promotes the tool globally;
 - unsafe names/session keys are rejected, artifacts are isolated by session, and promotion is never implicit.
 
-Storage defaults to `<PI_CODING_AGENT_DIR>/session-tools`; tests and the manual harness can override it with `PI_SESSION_TOOLS_ROOT`. Supported runtimes are deliberately constrained to `builtin:session_echo` and read-only `builtin:fixture_inventory`.
+Storage defaults to `<PI_CODING_AGENT_DIR>/session-tools`; tests and the manual harness can override it with `PI_SESSION_TOOLS_ROOT`. Supported runtimes are deliberately constrained to deterministic built-ins: `builtin:session_echo`, read-only `builtin:fixture_inventory`, and bounded `builtin:native_strings_search`.
 
 ## Verification performed
 
 Local verification against the installed Pi package:
 
 - Pi `0.84.4` declarations/source verified for `session_start`, `session_shutdown`/runtime replacement, `session_before_compact`, `SessionManager.getSessionId()`, `registerTool()`, `registerCommand()`, `setActiveTools()`, and UI confirmation.
-- `npm run check`: typecheck passed; 12 unit tests passed.
+- `npm run check`: typecheck passed; all 18 unit tests passed.
 - Separate Docker container using `vllm-local/qwen3.8-27b` reached the local vLLM endpoint and loaded the extension.
 - Session A: created, listed, invoked (`session_echo: lifecycle-ok`), exited, resumed, listed, and invoked again (`session_echo: resume-ok`).
 - Fresh session B: session tool absent.
@@ -40,6 +47,9 @@ Local verification against the installed Pi package:
 - The run intentionally had no Lookcam APK, captures, firmware, or device available. The goal therefore followed the fixture-driven/offline branch and did not probe the LAN or invent protocol facts.
 - A separate long `/goal` run used the copied goal extensions in its own Docker container with `thinking medium`, 64k context, and the local vLLM backend. It produced a durable Lookcam RE ledger, evidence inventory, static-analysis workflow, hypothesis ledger, synthetic fixture format/generator, client skeleton, audit report, and session-tool log. Native threshold compaction fired repeatedly; the session-scoped `fixture_inventory` manifest remained present and the tool was invoked after compaction.
 - The requested representative APK phase identified the official Google Play package `com.view.ppcs` and an APKCombo page for `V1.3.7`. Google Play required authentication; the APKCombo redirect reached an APKPure CDN bot gate (`403`). The download script applied a ZIP/APK magic-byte gate and saved no unverified file. No APK-specific claims were promoted to facts. `pi-interactive` remained running and untouched.
+- The user-supplied LookCam APK was then tested in isolated containers with only that file mounted. With the package skill `skills/session-tools-workflow/SKILL.md` available and Pi `thinking low`, the agent immediately created `evidence/apk_inventory.md`, called `session_tool_create`, and invoked `fixture_inventory` repeatedly before doing deeper analysis. It produced bounded APK entry/manifest/Dex evidence and crossed a native 64k compaction boundary. The post-compaction crystallizer correctly failed open when the task used `evidence/apk_inventory.md` relative to `/workspace` while the file lived under `/workspace/lookcam-re`; this exposed a path-handling issue in the task setup, not a compaction failure. The saved run artifacts are outside the repository at `/tmp/lookcam-re-low-final` and `/tmp/lookcam-sessions-low-final`. The model still returned to speculative DEX decoding before completing all requested reports or a confirmed post-compaction tool invocation.
+- The package now ships a concise session-tool workflow skill in `skills/session-tools-workflow/SKILL.md`, included by `npm pack` through `package.json`; it makes early tool creation, bounded reuse after compaction, `/tools review`/`/tools test`, and explicit-promotion boundaries operational guidance rather than relying on the task prompt alone.
+- The opt-in `pi-compaction-recovery` package has been split into its own standalone repository directory, with publish metadata, README, release checks, and the same tested implementation. For overflow compaction it calls Pi's exported native `compact()` first, then retries with a transient reduction ladder: tool-result payloads first, assistant reasoning blocks only if needed. The fallback also raises only the transient summarizer reserve budget up to the model-declared output ceiling; persisted settings and entries are unchanged. The current Pi API exposes `session_compact_failed` only as an observer event, so post-failure recovery cannot safely be implemented there without a core API change.
 
 The Pi commands used for the proven portions were:
 
@@ -61,11 +71,19 @@ Call session_echo with text exactly global-ok, and no other tool.
 
 ## Known limitations
 
-- Runtime execution remains constrained to the two built-ins; no arbitrary generated TypeScript is executed. `fixture_inventory` is available through `/tools-create-fixture-inventory <relative-path>` and caps inputs at 128 KiB.
+- Runtime execution remains constrained to deterministic built-ins; no arbitrary generated TypeScript is executed. `fixture_inventory` is available through `/tools-create-fixture-inventory <relative-path>` and caps inputs at 128 KiB, while `native_strings_search` is bounded to workspace-contained files.
 - Branch inheritance semantics are deferred; artifacts are keyed to the exact session ID.
-- Delete/review/promotion were covered by the manual Pi acceptance flow and store-level tests; the explicit-promotion invariant remains enforced at both layers.
-- A real Lookcam APK/capture is still required before implementing protocol/client behavior; the isolated web acquisition attempt was blocked by source authentication/bot protection.
+- The Pi `0.84.4` LookCam container probe found and fixed one API difference: `ModelRegistry.streamSimple` is absent there, so the adapter now uses `getProvider(model.provider).streamSimple()`, available in both installed versions. On the rerun, after the known `stopReason=length`, vLLM received the reduced recovery summarization request (about 2k prompt tokens and 520 generated tokens) and then a new continuation request; no extension error was emitted. The test Pi process remains active in the isolated container.
+- An earlier recovery-package probe (before the native GC slice) saved a successful fallback compaction at `2026-09-20T15:03:10.419Z`; its missing post-compaction fixture call was a model/workflow adherence issue, not a recovery failure. The later native GC probe above independently proves post-compaction reuse.
+- The discovery slice toward automatic garbage collection is implemented: `findRepeatedReadOnlyBashCandidates` scans a bounded entry suffix, recognizes repeated read-only command families inside harmless shell prefixes/pipelines, retains examples and source entry IDs, and rejects redirection, mutators, and arbitrary interpreters. Running it against the LookCam log found concrete candidates such as `strings|grep` (11 occurrences), `grep` (8), and `readelf|grep` (4).
+- The next slice now materializes the repeated `strings|grep` candidate as session-scoped `builtin:native_strings_search`. It uses `execFile("strings", ...)` without a shell, enforces workspace containment, a 32 MiB input cap, a 32 KiB output cap, typed `path/query/minLength` parameters, provenance, and immediate registration. The runtime, candidate forwarding, and conservative default path are covered by the repository check.
+- The pre-compaction garbage-collection slice is now present: after safe materialization, it mutates only Pi's in-memory `preparation.messagesToSummarize`/`turnPrefixMessages`, replacing matching verbose Bash tool results with a bounded provenance marker. The immutable JSONL history is untouched and Pi's native summarizer still owns compaction. A focused unit test verifies matching results are replaced while unrelated results remain intact. An earlier live probe still hit the known vLLM length-stop failure; the subsequent controlled probe below reaches the hook successfully.
+- A fresh isolated Pi RPC probe in the LookCam container now validates the full pre-compaction path with real APK-derived native-library commands: 16 `strings|grep` observations produced a session-scoped `native_strings_search` manifest with 16 source entry IDs; the hook reported replacement of 4 verbose results; native manual compaction succeeded at `tokensBefore: 41427` and `estimatedTokensAfter: 20703`. The immutable JSONL contains the compaction entry and the manifest is under session key `gc-probe-lookcam-3`.
+- The resume check now succeeds in the same isolated container: after reopening the saved LookCam session, the model emitted one `native_strings_search` call and the runtime returned 84 `DPS_` matches with `scope=session` and `originSession=gc-probe-lookcam-3`. This proves manifest restoration and actual post-compaction execution, not merely on-disk presence.
+- `/tools test <name>` now dispatches the native runtime as well as demo/fixture runtimes; newly crystallized native manifests retain a conservative workspace-relative `defaultPath` derived from the observed command for this deterministic smoke test.
+- Delete/review/promotion were covered by the manual Pi acceptance flow and store-level tests; the explicit-promotion invariant remains enforced at both layers, including a native-analysis manifest with runtime configuration.
+- A real Lookcam capture/device trace is still required before implementing protocol/client behavior. Static APK evidence is now available in the saved isolated run; protocol/client behavior remains outside this lifecycle slice.
 
 ## Next smallest task
 
-Add a user-supplied Lookcam APK or accessible capture and run the static-analysis workflow; protocol/client implementation remains intentionally gated on product-specific evidence.
+Extend the same bounded pattern to additional read-only candidate families and improve the compact provenance marker. The lifecycle/GC slice itself is complete; protocol/client behavior and the remaining RE report set are separate follow-on work.

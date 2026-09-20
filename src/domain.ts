@@ -41,3 +41,5 @@ export const DEMO_RUNTIME_KIND = "demo";
 export const DEMO_RUNTIME_ENTRYPOINT = "builtin:session_echo";
 export const FIXTURE_RUNTIME_KIND = "fixture";
 export const FIXTURE_RUNTIME_ENTRYPOINT = "builtin:fixture_inventory";
+export const STRINGS_RUNTIME_KIND = "native-analysis";
+export const STRINGS_RUNTIME_ENTRYPOINT = "builtin:native_strings_search";

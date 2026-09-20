@@ -14,7 +14,7 @@ Generated tools are executable artifacts and therefore a trust boundary.
 - a promoted tool having broader side effects than shown during review;
 - global name collision changing behavior unexpectedly.
 
-## Bootstrap safety rules
+## Runtime safety rules
 
 - sanitize/validate every artifact name before filesystem use;
 - never persist environment secrets intentionally;

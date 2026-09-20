@@ -1,6 +1,7 @@
 # External references
 
-These URLs were current when the bootstrap was generated (2026-09-20). Verify again during implementation.
+These are the external references used to verify the Pi integration. Re-check
+them when upgrading the supported Pi version.
 
 - Pi Extensions: https://pi.dev/docs/latest/extensions
 - Pi Compaction: https://pi.dev/docs/latest/compaction

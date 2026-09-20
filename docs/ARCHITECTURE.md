@@ -158,9 +158,10 @@ A failure in steps 2–6 should normally leave normal compaction unaffected.
 
 ## Runtime strategy
 
-This is deliberately unresolved in bootstrap.
+The current implementation intentionally supports only reviewed deterministic
+runtime kinds. Arbitrary generated source is not executed.
 
-Possible paths:
+Future paths, subject to a separate security review:
 
 - generate native Pi TypeScript tool modules;
 - use a constrained declarative runner;

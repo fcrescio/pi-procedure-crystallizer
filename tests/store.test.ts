@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { STRINGS_RUNTIME_ENTRYPOINT, STRINGS_RUNTIME_KIND } from "../src/domain.js";
 import { createSessionManifest } from "../src/manifest.js";
 import { ArtifactStore } from "../src/store.js";
 
@@ -80,6 +81,40 @@ test("promotion is never implicit", async () => {
     );
     assert.deepEqual(await store.listGlobal(), []);
     assert.equal((await store.listSession("A")).length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("native analysis tools remain session-scoped until explicitly promoted", async () => {
+  const { root, store } = await fixture();
+  try {
+    const manifest = createSessionManifest({
+      sessionKey: "lookcam",
+      name: "native_strings_search",
+      description: "Bounded native string search",
+      trigger: "pre_compaction",
+      runtimeKind: STRINGS_RUNTIME_KIND,
+      entrypoint: STRINGS_RUNTIME_ENTRYPOINT,
+      runtimeConfig: {
+        defaultPath: "lookcam-re/apktool-out/lib/arm64-v8a/libDPS_API_PPCS.so",
+        maxBytes: 32 * 1024 * 1024,
+        maxOutputBytes: 32 * 1024,
+      },
+      sourceEntryIds: ["entry-1", "entry-2"],
+    });
+    await store.putSessionManifest("lookcam", manifest);
+
+    assert.deepEqual(await store.listGlobal(), []);
+    await assert.rejects(() => store.promote("lookcam", "native_strings_search", false), /explicit authorization/);
+
+    const promoted = await store.promote("lookcam", "native_strings_search", true);
+    assert.equal(promoted.manifest.scope, "global");
+    assert.equal(promoted.manifest.runtime.entrypoint, STRINGS_RUNTIME_ENTRYPOINT);
+    assert.deepEqual(promoted.manifest.runtime.config, manifest.runtime.config);
+    assert.equal(promoted.manifest.promotedFrom?.artifactId, manifest.id);
+    assert.equal((await store.listSession("lookcam")).length, 1);
+    assert.equal((await store.listGlobal()).length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

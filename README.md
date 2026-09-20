@@ -1,37 +1,78 @@
 # pi-session-tools
 
-Experimental Pi extension for **session-scoped procedural memory**.
+Session-scoped procedural memory for [Pi](https://pi.dev): preserve useful,
+deterministic procedures before context compaction without silently turning
+them into global tools.
 
-The core idea is simple: when useful executable know-how emerges during a long Pi session, crystallize it into a callable tool **before context compaction can erase the implementation details**. The tool remains an artifact of that session. It is available when that exact session is resumed, but it is not inherited by unrelated sessions. Promotion to a global tool is always an explicit user action.
+During a long session the extension observes a bounded suffix of the Pi
+history. Repeated safe read-only procedures can become named, inspectable
+tools attached to that session. The artifact survives compaction and resume,
+while unrelated sessions remain isolated. Promotion to the global store is
+always an explicit user action.
 
-## Status
+## What is included
 
-Bootstrap repository. The architecture and acceptance criteria are specified; the runtime implementation is intentionally minimal so Codex can verify current Pi APIs before locking in details.
+- lifecycle-safe session artifact storage and restoration;
+- `/tools list`, `inspect`, `review`, `test`, `delete`, and `promote`;
+- bounded pre-compaction discovery and provenance;
+- `native_strings_search`, a workspace-contained runtime for native-library
+  analysis;
+- semantic replacement of crystallized tool results in Pi's in-memory native
+  compaction preparation, without rewriting the JSONL session history;
+- a small workflow skill for creating and reusing session tools.
 
-## Start here
+The extension does not replace Pi's native compaction summarizer and does not
+execute arbitrary generated source or install dependencies silently.
 
-1. Read `LONG_TERM_GOAL.md`.
-2. Read `AGENTS.md`.
-3. Read `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md` only as needed.
-4. Follow `BOOTSTRAP_PROMPT.md` for the first implementation pass.
+## Install
 
-## Intended v0 behavior
+```bash
+pi install npm:pi-session-tools
+```
 
-- A Pi session has its own set of generated tools.
-- Before `/compact` or automatic compaction, a bounded reflection pass may identify reusable procedural knowledge.
-- Candidate procedures can be materialized as session tools.
-- Session tools survive compaction and session resume.
-- New/unrelated sessions do not see them.
-- `/tools list|inspect|review|test|promote|delete` provides user control.
-- Only `promote` crosses the session → global boundary.
-- The extension does **not** replace Pi's normal compaction summary pipeline.
+Enable or inspect the package with `pi config`. To load a checkout directly:
 
-## Local development target
+```bash
+pi -e ./extensions/index.ts
+```
+
+The package requires Node.js 22 or newer and a current Pi installation. Pi
+supplies the `@earendil-works/pi-coding-agent` and `typebox` peer packages.
+
+## User workflow
+
+Session tools are created and restored automatically when the lifecycle finds a
+safe candidate. Inspect them with:
+
+```text
+/tools list
+/tools review
+/tools inspect <name>
+/tools test <name>
+```
+
+To copy one into the separate global store, use `/tools promote <name>` and
+confirm the action. There is no implicit promotion path.
+
+## Development
 
 ```bash
 npm install
 npm run check
-pi -e .
+npm pack --dry-run
 ```
 
-Before relying on any Pi API signature, verify it against the currently installed Pi version and the latest official documentation.
+The repository contains the product specification and design notes under
+`docs/`. The deterministic tests run without launching Pi; the lifecycle
+adapter has also been exercised against Pi 0.84.4 and a real LookCam APK.
+
+## Safety boundary
+
+Generated artifacts are executable capabilities. This package therefore keeps
+runtime classes deliberately narrow, validates names and workspace paths,
+caps input/output, records provenance, and keeps session persistence separate
+from global scope. Review `docs/SECURITY.md` before adding a new runtime.
+
+## License
+
+MIT

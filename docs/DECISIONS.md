@@ -31,3 +31,15 @@ The next runtime is `builtin:fixture_inventory`: read-only, workspace-relative, 
 ## D-007 — Pre-compaction crystallization only honors explicit bounded requests
 
 The first automatic crystallizer scans a bounded suffix of recent Pi entries and accepts only structured `session_tool_create` calls previously emitted by the agent. It does not infer tools from prose, shell commands, or generated source. Materialization still requires a workspace-relative regular file within the fixture size cap; overflow and cancellation skip crystallization, and all failures remain fail-open so Pi's native compaction continues.
+
+## D-008 — Tool-use workflow is package-distributed guidance
+
+The package ships `skills/session-tools-workflow/SKILL.md`. It tells Pi to create and invoke a session tool as soon as a deterministic fixture exists, reuse it after compaction, and never promote automatically. The guidance is intentionally procedural and bounded so lower-thinking models do not spend the task rediscovering tool usage or debugging an unnecessary parser.
+
+## D-009 — Compaction recovery is a separate, native-first package
+
+`pi-compaction-recovery` is an opt-in package and separate repository from session-tool crystallization. Pi `session_compact_failed` is an observer-only event, so recovery runs in `session_before_compact`: it calls Pi's exported native `compact()` first for overflow compaction, then retries with a transient copy that first removes tool-result payloads and, only if needed, assistant reasoning blocks. It never rewrites persisted entries, silently changes the main package's native-compaction behavior, or promotes anything globally.
+
+## D-010 — Discovery precedes runtime materialization
+
+Pre-compaction discovery first emits bounded, provenance-bearing candidates for repeated read-only procedures. It must not turn arbitrary shell history into executable tools. Candidate classes get dedicated safe runtimes and typed parameters in later slices; generated source execution remains disabled by default.

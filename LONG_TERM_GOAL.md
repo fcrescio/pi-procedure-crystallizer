@@ -155,6 +155,19 @@ A reflection failure must not normally block compaction. Prefer fail-open behavi
 
 Overflow compaction is latency-sensitive. The implementation may need a smaller budget or skip policy for `reason === "overflow"` if reflection risks making recovery worse.
 
+## Roadmap to the full garbage-collection lifecycle
+
+The durable implementation target is the following sequence:
+
+1. **Observe:** bounded pre-compaction scan of recent assistant/tool entries, including repeated read-only shell procedures, created scripts, and their successful results.
+2. **Candidate:** produce a provenance-bearing procedure candidate with normalized inputs, evidence, safety classification, and a conservative reuse score. Detection must be deterministic or explicitly model-assisted; prose alone is not enough.
+3. **Materialize:** turn approved candidate classes into session-scoped tools with typed parameters, bounded output, declared side effects, and a smoke test. Never execute arbitrary generated source by default.
+4. **Crystallize:** make the tool available immediately and write a compact provenance marker into the compaction summary so the active context no longer needs the original exploratory tool results.
+5. **Collect:** let Pi's native compaction discard the summarized context while retaining the immutable session log and the session artifact. On resume, restore the artifact from the exact session.
+6. **Review/promote:** expose the candidate for `/tools review` and require explicit confirmation before copying it to global scope.
+
+The first implementation slice toward this roadmap is the deterministic observer for repeated read-only Bash procedures, followed by a narrowly scoped `strings|grep` runtime for native-library analysis. It materializes only that safe typed runtime rather than arbitrary shell execution; subsequent slices can add other dedicated ELF/section runtimes.
+
 ---
 
 ## Reflection philosophy

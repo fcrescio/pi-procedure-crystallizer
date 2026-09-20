@@ -1,5 +1,7 @@
 import os from "node:os";
 import { readFile, stat } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -8,11 +10,14 @@ import {
   DEMO_RUNTIME_KIND,
   FIXTURE_RUNTIME_ENTRYPOINT,
   FIXTURE_RUNTIME_KIND,
+  STRINGS_RUNTIME_ENTRYPOINT,
+  STRINGS_RUNTIME_KIND,
   type StoredTool,
 } from "../src/domain.js";
 import { createSessionManifest } from "../src/manifest.js";
 import { assertSafeSessionKey } from "../src/paths.js";
-import { BoundedReflectionEngine } from "../src/reflection.js";
+import { BoundedReflectionEngine, findRepeatedReadOnlyBashCandidates, replaceCrystallizedProcedureDetails } from "../src/reflection.js";
+import type { CrystallizedProcedure, ProcedureCandidate } from "../src/reflection.js";
 import { ArtifactStore } from "../src/store.js";
 
 const DEMO_PARAMETERS = Type.Object({
@@ -29,6 +34,9 @@ const CREATE_TOOL_PARAMETERS = Type.Object({
 });
 type CreateToolParameters = { defaultPath: string };
 const MAX_FIXTURE_BYTES = 128 * 1024;
+const MAX_NATIVE_ANALYSIS_BYTES = 32 * 1024 * 1024;
+const MAX_NATIVE_OUTPUT_BYTES = 32 * 1024;
+const execFile = promisify(execFileCallback);
 
 function artifactRoot(): string {
   return path.resolve(
@@ -49,6 +57,10 @@ function isDemoTool(tool: StoredTool): boolean {
 
 function isFixtureTool(tool: StoredTool): boolean {
   return tool.manifest.runtime.kind === FIXTURE_RUNTIME_KIND && tool.manifest.runtime.entrypoint === FIXTURE_RUNTIME_ENTRYPOINT;
+}
+
+function isStringsTool(tool: StoredTool): boolean {
+  return tool.manifest.runtime.kind === STRINGS_RUNTIME_KIND && tool.manifest.runtime.entrypoint === STRINGS_RUNTIME_ENTRYPOINT;
 }
 
 function demoTool(tool: StoredTool): ToolDefinition<typeof DEMO_PARAMETERS> {
@@ -96,6 +108,49 @@ async function executeFixture(tool: StoredTool, params: FixtureParameters, ctx: 
   };
 }
 
+const STRINGS_PARAMETERS = Type.Object({
+  path: Type.String({ description: "Workspace-relative ELF/native-library path" }),
+  query: Type.Optional(Type.String({ description: "Case-insensitive substring to retain" })),
+  minLength: Type.Optional(Type.Integer({ minimum: 3, maximum: 32, description: "Minimum printable string length" })),
+});
+type StringsParameters = { path: string; query?: string; minLength?: number };
+
+async function executeStrings(tool: StoredTool, params: StringsParameters, ctx: ExtensionContext) {
+  assertSafeFixturePath(params.path);
+  const target = path.resolve(ctx.cwd, params.path);
+  const relative = path.relative(ctx.cwd, target);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Native analysis path escapes the workspace");
+  const info = await stat(target);
+  if (!info.isFile()) throw new Error("Native analysis path must identify a regular file");
+  if (info.size > MAX_NATIVE_ANALYSIS_BYTES) throw new Error(`Native analysis file exceeds ${MAX_NATIVE_ANALYSIS_BYTES} byte limit`);
+  const minLength = Math.max(3, Math.min(32, Math.trunc(params.minLength ?? 6)));
+  const result = await execFile("strings", ["-a", "-n", String(minLength), target], {
+    cwd: ctx.cwd,
+    maxBuffer: MAX_NATIVE_OUTPUT_BYTES * 4,
+    windowsHide: true,
+  });
+  const query = params.query?.toLocaleLowerCase();
+  const lines = result.stdout.split(/\r?\n/u).filter((line) => !query || line.toLocaleLowerCase().includes(query));
+  const text = lines.join("\n").slice(0, MAX_NATIVE_OUTPUT_BYTES);
+  return {
+    content: [{ type: "text" as const, text: `native_strings_search: ${relative} matches=${lines.length}\n${text}` }],
+    details: { artifactId: tool.manifest.id, scope: tool.manifest.scope, originSession: tool.manifest.origin.sessionKey, truncated: text.length < lines.join("\n").length },
+  };
+}
+
+function stringsTool(tool: StoredTool): ToolDefinition<typeof STRINGS_PARAMETERS> {
+  return {
+    name: tool.manifest.name,
+    label: tool.manifest.name,
+    description: tool.manifest.description,
+    promptSnippet: "Search bounded printable strings in an ELF/native library without shell execution",
+    parameters: STRINGS_PARAMETERS,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      return executeStrings(tool, params, ctx);
+    },
+  };
+}
+
 function fixtureTool(tool: StoredTool): ToolDefinition<typeof FIXTURE_PARAMETERS> {
   return {
     name: tool.manifest.name,
@@ -110,13 +165,23 @@ function fixtureTool(tool: StoredTool): ToolDefinition<typeof FIXTURE_PARAMETERS
 }
 
 function isSupportedTool(tool: StoredTool): boolean {
-  return isDemoTool(tool) || isFixtureTool(tool);
+  return isDemoTool(tool) || isFixtureTool(tool) || isStringsTool(tool);
 }
 
 function assertSafeFixturePath(value: string): void {
   if (!value || path.isAbsolute(value) || value.split(/[\\/]/u).includes("..")) {
     throw new Error("Fixture path must be non-empty, workspace-relative, and cannot traverse parent directories");
   }
+}
+
+function deriveNativeTestPath(command: string, cwd: string): string | undefined {
+  const directory = command.match(/(?:^|&&)\s*cd\s+([^;&|]+)/u)?.[1]?.trim();
+  const target = command.match(/\bstrings\b\s+(?:-[^\s]+\s+)*([^\s|;&]+)/u)?.[1];
+  if (!target) return undefined;
+  const absolute = path.resolve(cwd, directory ?? ".", target);
+  const relative = path.relative(cwd, absolute);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+  return relative;
 }
 
 function formatTool(tool: StoredTool): string {
@@ -167,6 +232,7 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
   const registerStoredTool = (tool: StoredTool): boolean => {
     if (isDemoTool(tool)) pi.registerTool(demoTool(tool));
     else if (isFixtureTool(tool)) pi.registerTool(fixtureTool(tool));
+    else if (isStringsTool(tool)) pi.registerTool(stringsTool(tool));
     else return false;
     return true;
   };
@@ -195,6 +261,32 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
           runtimeConfig: { defaultPath: candidate.defaultPath },
           ...(candidate.sourceEntryId ? { sourceEntryIds: [candidate.sourceEntryId] } : {}),
           taskSummary: "Recovered explicit session_tool_create request at the compaction boundary.",
+        }),
+      );
+      registerStoredTool(stored);
+    },
+    materializeProcedure: async (candidate: ProcedureCandidate, input) => {
+      if (candidate.signature !== "strings|grep" || candidate.occurrences < 3) return;
+      const existing = (await store.listSession(input.sessionKey)).find(isStringsTool);
+      if (existing) return;
+      const defaultPath = deriveNativeTestPath(candidate.command, input.cwd ?? process.cwd());
+      const stored = await store.putSessionManifest(
+        input.sessionKey,
+        createSessionManifest({
+          sessionKey: input.sessionKey,
+          name: "native_strings_search",
+          description: "Search bounded printable strings in an ELF/native library without executing shell commands.",
+          trigger: "pre_compaction",
+          runtimeKind: STRINGS_RUNTIME_KIND,
+          entrypoint: STRINGS_RUNTIME_ENTRYPOINT,
+          runtimeConfig: {
+            maxBytes: MAX_NATIVE_ANALYSIS_BYTES,
+            maxOutputBytes: MAX_NATIVE_OUTPUT_BYTES,
+            sourceSignature: candidate.signature,
+            ...(defaultPath ? { defaultPath } : {}),
+          },
+          sourceEntryIds: candidate.sourceEntryIds,
+          taskSummary: `Recovered repeated read-only ${candidate.signature} procedure (${candidate.occurrences} observations).`,
         }),
       );
       registerStoredTool(stored);
@@ -296,7 +388,13 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
           if (!isSupportedTool(tool)) throw new Error(`Tool ${name} has no supported deterministic test runtime`);
           const result = isDemoTool(tool)
             ? executeDemo(tool, "tools-test")
-            : await executeFixture(tool, { path: String(tool.manifest.runtime.config?.defaultPath ?? "") }, ctx);
+            : isFixtureTool(tool)
+              ? await executeFixture(tool, { path: String(tool.manifest.runtime.config?.defaultPath ?? "") }, ctx)
+              : await executeStrings(tool, {
+                path: String(tool.manifest.runtime.config?.defaultPath ?? ""),
+                query: "DPS_",
+                minLength: 6,
+              }, ctx);
           ctx.ui.notify(`Test passed for ${name}: ${result.content[0]?.type === "text" ? result.content[0].text : "ok"}`, "info");
           return;
         }
@@ -389,6 +487,13 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
 
   pi.on("session_before_compact", async (event, ctx) => {
     try {
+      const observed = findRepeatedReadOnlyBashCandidates(event.branchEntries);
+      if (observed.length > 0) {
+        ctx.ui.notify(
+          `Pre-compaction procedure candidates detected (${observed.length}); safe runtimes will be materialized where supported.\n${observed.map((candidate) => `${candidate.name} ×${candidate.occurrences}: ${candidate.command}`).join("\n")}`,
+          "info",
+        );
+      }
       await reflection.maybeCrystallize({
         reason: event.reason,
         sessionKey: currentSessionKey(ctx),
@@ -396,6 +501,19 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
         branchEntries: event.branchEntries,
         signal: event.signal,
       });
+      const sessionTools = await store.listSession(currentSessionKey(ctx));
+      const crystallized: CrystallizedProcedure[] = observed
+        .filter((candidate) => candidate.signature === "strings|grep" && candidate.occurrences >= 3)
+        .filter(() => sessionTools.some(isStringsTool))
+        .map((candidate) => ({ toolName: "native_strings_search", candidate }));
+      if (crystallized.length > 0) {
+        const messages = [
+          ...event.preparation.messagesToSummarize,
+          ...event.preparation.turnPrefixMessages,
+        ] as unknown[];
+        const replaced = replaceCrystallizedProcedureDetails(messages, crystallized);
+        ctx.ui.notify(`Crystallized ${crystallized.length} procedure(s) and replaced ${replaced} verbose tool result(s) in the native compaction input.`, "info");
+      }
     } catch (error) {
       ctx.ui.notify(`Session-tool reflection skipped: ${String(error)}`, "warning");
     }

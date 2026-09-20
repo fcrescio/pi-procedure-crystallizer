@@ -1,14 +1,24 @@
 {
   "name": "pi-session-tools",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Session-scoped procedural tools for Pi, crystallized before compaction and explicitly promotable by the user.",
   "type": "module",
   "license": "MIT",
   "keywords": ["pi-package", "pi", "agent", "tools", "compaction", "procedural-memory"],
-  "files": ["extensions", "src", "docs", "README.md", "LONG_TERM_GOAL.md"],
+  "files": [
+    "extensions",
+    "src",
+    "skills",
+    "docs/ARCHITECTURE.md",
+    "docs/PRODUCT_SPEC.md",
+    "docs/SECURITY.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": ["./extensions"],
+    "skills": ["./skills"]
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -18,6 +28,20 @@
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/fcrescio/pi-session-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fcrescio/pi-session-tools/issues"
+  },
+  "homepage": "https://github.com/fcrescio/pi-session-tools#readme",
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
