@@ -24,6 +24,10 @@ const FIXTURE_PARAMETERS = Type.Object({
   path: Type.String({ description: "Workspace-relative fixture path" }),
 });
 type FixtureParameters = { path: string };
+const CREATE_TOOL_PARAMETERS = Type.Object({
+  defaultPath: Type.String({ description: "Workspace-relative fixture path used by the new session tool" }),
+});
+type CreateToolParameters = { defaultPath: string };
 const MAX_FIXTURE_BYTES = 128 * 1024;
 
 function artifactRoot(): string {
@@ -70,9 +74,7 @@ function executeDemo(tool: StoredTool, text: string) {
 }
 
 async function executeFixture(tool: StoredTool, params: FixtureParameters, ctx: ExtensionContext) {
-  if (path.isAbsolute(params.path) || params.path.split(/[\\/]/u).includes("..")) {
-    throw new Error("Fixture path must be workspace-relative and cannot traverse parent directories");
-  }
+  assertSafeFixturePath(params.path);
   const fixturePath = path.resolve(ctx.cwd, params.path);
   const relative = path.relative(ctx.cwd, fixturePath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Fixture path escapes the workspace");
@@ -109,6 +111,12 @@ function fixtureTool(tool: StoredTool): ToolDefinition<typeof FIXTURE_PARAMETERS
 
 function isSupportedTool(tool: StoredTool): boolean {
   return isDemoTool(tool) || isFixtureTool(tool);
+}
+
+function assertSafeFixturePath(value: string): void {
+  if (!value || path.isAbsolute(value) || value.split(/[\\/]/u).includes("..")) {
+    throw new Error("Fixture path must be non-empty, workspace-relative, and cannot traverse parent directories");
+  }
 }
 
 function formatTool(tool: StoredTool): string {
@@ -163,6 +171,42 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
     else return false;
     return true;
   };
+
+  pi.registerTool({
+    name: "session_tool_create",
+    label: "session_tool_create",
+    description: "Create a session-scoped bounded fixture_inventory tool. Never promotes anything globally.",
+    promptSnippet: "Create a session-scoped read-only fixture inventory tool",
+    parameters: CREATE_TOOL_PARAMETERS,
+    async execute(_toolCallId, params: CreateToolParameters, _signal, _onUpdate, ctx) {
+      assertSafeFixturePath(params.defaultPath);
+      const sessionKey = currentSessionKey(ctx);
+      const existing = (await store.listSession(sessionKey)).find((tool) => tool.manifest.name === "fixture_inventory");
+      if (existing) {
+        return {
+          content: [{ type: "text" as const, text: "fixture_inventory already exists in this session" }],
+          details: { artifactId: existing.manifest.id, scope: existing.manifest.scope },
+        };
+      }
+      const stored = await store.putSessionManifest(
+        sessionKey,
+        createSessionManifest({
+          sessionKey,
+          name: "fixture_inventory",
+          description: "Inventory one bounded workspace-relative fixture without modifying it.",
+          trigger: "agent",
+          runtimeKind: FIXTURE_RUNTIME_KIND,
+          entrypoint: FIXTURE_RUNTIME_ENTRYPOINT,
+          runtimeConfig: { defaultPath: params.defaultPath },
+        }),
+      );
+      registerStoredTool(stored);
+      return {
+        content: [{ type: "text" as const, text: `Created session-scoped fixture_inventory for ${params.defaultPath}` }],
+        details: { artifactId: stored.manifest.id, scope: stored.manifest.scope, directory: stored.directory },
+      };
+    },
+  });
 
   const restoreTools = async (ctx: ExtensionContext): Promise<void> => {
     const sessionKey = currentSessionKey(ctx);
@@ -293,9 +337,7 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       try {
         const defaultPath = args.trim();
-        if (!defaultPath || path.isAbsolute(defaultPath) || defaultPath.split(/[\\/]/u).includes("..")) {
-          throw new Error("Usage: /tools-create-fixture-inventory <workspace-relative-default-path>");
-        }
+        assertSafeFixturePath(defaultPath);
         const sessionKey = currentSessionKey(ctx);
         const stored = await store.putSessionManifest(
           sessionKey,
