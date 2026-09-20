@@ -24,6 +24,19 @@ test("session stores are isolated", async () => {
   }
 });
 
+test("manifest round-trips through the session store", async () => {
+  const { root, store } = await fixture();
+  try {
+    const manifest = createSessionManifest({ sessionKey: "A", name: "session_echo", description: "demo" });
+    await store.putSessionManifest("A", manifest);
+    const restored = await store.readSession("A", "session_echo");
+    assert.deepEqual(restored.manifest, manifest);
+    assert.equal(restored.manifest.schemaVersion, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("promotion requires explicit authorization and preserves session copy", async () => {
   const { root, store } = await fixture();
   try {
@@ -53,6 +66,20 @@ test("deleting a session tool does not delete promoted global copy", async () =>
     await store.deleteSession("A", "session_echo");
     assert.equal((await store.listSession("A")).length, 0);
     assert.equal((await store.listGlobal()).length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("promotion is never implicit", async () => {
+  const { root, store } = await fixture();
+  try {
+    await store.putSessionManifest(
+      "A",
+      createSessionManifest({ sessionKey: "A", name: "session_echo", description: "demo" }),
+    );
+    assert.deepEqual(await store.listGlobal(), []);
+    assert.equal((await store.listSession("A")).length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

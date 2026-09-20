@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CreationTrigger, ToolManifestV1 } from "./domain.js";
+import { DEMO_RUNTIME_ENTRYPOINT, DEMO_RUNTIME_KIND, type CreationTrigger, type ToolManifestV1 } from "./domain.js";
 import { assertSafeSessionKey, assertSafeToolName } from "./paths.js";
 
 export function createSessionManifest(input: {
@@ -26,8 +26,8 @@ export function createSessionManifest(input: {
       trigger: input.trigger ?? "manual",
     },
     runtime: {
-      kind: input.runtimeKind ?? "demo",
-      entrypoint: input.entrypoint ?? "builtin:session_echo",
+      kind: input.runtimeKind ?? DEMO_RUNTIME_KIND,
+      entrypoint: input.entrypoint ?? DEMO_RUNTIME_ENTRYPOINT,
     },
     safety: {
       declaredSideEffects: [],

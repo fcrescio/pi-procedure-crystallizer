@@ -1,7 +1,7 @@
-import { mkdir, readFile, readdir, rm, writeFile, cp } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StoredTool, ToolManifestV1 } from "./domain.js";
-import { assertSafeSessionKey, assertSafeToolName, childPath } from "./paths.js";
+import { assertSafeSessionKey, assertSafeStoreRoot, assertSafeToolName, childPath } from "./paths.js";
 
 export interface ArtifactStoreOptions {
   root: string;
@@ -12,6 +12,7 @@ export class ArtifactStore {
 
   constructor(options: ArtifactStoreOptions) {
     this.root = path.resolve(options.root);
+    assertSafeStoreRoot(this.root);
   }
 
   private sessionToolDir(sessionKey: string, name: string): string {
@@ -75,9 +76,10 @@ export class ArtifactStore {
     if (!authorized) throw new Error("Promotion requires explicit authorization");
     const source = await this.readSession(sessionKey, name);
     const destination = this.globalToolDir(name);
-    await rm(destination, { recursive: true, force: true });
     await mkdir(path.dirname(destination), { recursive: true });
-    await cp(source.directory, destination, { recursive: true });
+    const temporary = childPath(this.root, "global", `.${name}.promotion-${source.manifest.id}`);
+    await rm(temporary, { recursive: true, force: true });
+    await cp(source.directory, temporary, { recursive: true });
 
     const now = new Date().toISOString();
     const promoted: ToolManifestV1 = {
@@ -90,7 +92,9 @@ export class ArtifactStore {
         promotedAt: now,
       },
     };
-    await writeFile(path.join(destination, "manifest.json"), `${JSON.stringify(promoted, null, 2)}\n`, "utf8");
+    await writeFile(path.join(temporary, "manifest.json"), `${JSON.stringify(promoted, null, 2)}\n`, "utf8");
+    await rm(destination, { recursive: true, force: true });
+    await rename(temporary, destination);
     return { manifest: promoted, directory: destination };
   }
 
@@ -105,6 +109,7 @@ export class ArtifactStore {
     }
     const output: StoredTool[] = [];
     for (const name of names) {
+      if (name.startsWith(".")) continue;
       assertSafeToolName(name);
       const directory = this.globalToolDir(name);
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as ToolManifestV1;

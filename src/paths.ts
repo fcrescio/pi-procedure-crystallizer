@@ -16,6 +16,10 @@ export function assertSafeSessionKey(key: string): void {
   }
 }
 
+export function assertSafeStoreRoot(root: string): void {
+  if (!path.isAbsolute(root)) throw new Error("Artifact store root must be absolute");
+}
+
 export function childPath(root: string, ...segments: string[]): string {
   const resolvedRoot = path.resolve(root);
   const candidate = path.resolve(resolvedRoot, ...segments);

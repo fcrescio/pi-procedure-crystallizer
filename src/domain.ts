@@ -35,3 +35,6 @@ export interface StoredTool {
   manifest: ToolManifestV1;
   directory: string;
 }
+
+export const DEMO_RUNTIME_KIND = "demo";
+export const DEMO_RUNTIME_ENTRYPOINT = "builtin:session_echo";

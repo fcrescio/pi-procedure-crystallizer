@@ -17,3 +17,9 @@ The extension may observe `session_before_compact` and materialize procedural kn
 ## D-004 — Prove lifecycle before reflection quality
 
 The first milestone uses a deterministic/manual demo tool if necessary. Do not spend significant effort on automatic LLM crystallization until session isolation, resume, compaction survival, and promotion are demonstrated.
+
+## D-005 — First runtime is a constrained built-in demo
+
+The first Pi adapter materializes only the deterministic `builtin:session_echo` runtime. Manifests live on disk; Pi dynamically registers this built-in implementation on `session_start` and after creation/promotion. Other runtime kinds are ignored until a separately reviewed execution strategy exists.
+
+Artifacts default to `<PI_CODING_AGENT_DIR>/session-tools` (or `PI_SESSION_TOOLS_ROOT` for tests), with session IDs obtained from Pi's `SessionManager.getSessionId()` and global artifacts in a separate `global/` directory.
