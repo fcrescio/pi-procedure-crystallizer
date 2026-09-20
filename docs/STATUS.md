@@ -30,6 +30,7 @@ Local verification against the installed Pi package:
 - Fresh session C: session list had no session tools, global list contained `session_echo`, and the globally scoped tool was callable (`session_echo: global-ok`).
 - A real compaction survival run was executed in an isolated Docker container using the copied `pi-interactive` goal setup (`pi-goal-list-loop-audit`, `pi-loop-guard`, `pi-subagents`, and local packages). The session used Pi `0.84.4`, `vllm-local/qwen3.8-27b`, thinking `medium`, and a temporary 64k context window.
 - The `/goal` task reached a recorded turn usage of about 46.8k tokens, continued into a second turn, and GLLA displayed `compacting…` at the native compaction boundary. The model then resumed work and wrote new post-compaction artifacts (`.gitignore`, `input-inventory.md`) in the isolated workspace. The running `pi-interactive` container was not touched.
+- The deterministic RPC harness now performs an explicit native Pi compaction after three bounded fixture prompts. In the vLLM container it observed `compaction_start`, then `compaction_end` with `tokensBefore: 37698` and `estimatedTokensAfter: 34271`, and successfully invoked `session_echo: compacted-ok` afterward.
 - The run intentionally had no Lookcam APK, captures, firmware, or device available. The goal therefore followed the fixture-driven/offline branch and did not probe the LAN or invent protocol facts.
 
 The Pi commands used for the proven portions were:
@@ -54,8 +55,8 @@ Call session_echo with text exactly global-ok, and no other tool.
 
 - The constrained demo runtime is the only executable format; no arbitrary generated TypeScript is executed.
 - Branch inheritance semantics are deferred; artifacts are keyed to the exact session ID.
-- The manual run demonstrates native compaction and goal continuation, but does not yet assert the extension-specific `session_echo` invocation after compaction. That should be the next integration-harness assertion.
+- The harness does not yet cover same-session process restart and fresh-session absence in one run; those behaviors are covered by the earlier manual lifecycle run and should be folded into the harness next.
 
 ## Next smallest task
 
-Add a deterministic Pi integration harness that fills a test session to the compaction threshold, observes `session_before_compact` without replacing Pi's native summary, and invokes the restored `session_echo` after compaction.
+Extend the harness with process restart/resume and a fresh-session assertion, then implement `/tools review` and `/tools test <name>` as the next governance slice.
