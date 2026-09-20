@@ -7,8 +7,9 @@ export function createSessionManifest(input: {
   name: string;
   description: string;
   trigger?: CreationTrigger;
-  runtimeKind?: string;
-  entrypoint?: string;
+    runtimeKind?: string;
+    entrypoint?: string;
+    runtimeConfig?: Record<string, unknown>;
 }): ToolManifestV1 {
   assertSafeSessionKey(input.sessionKey);
   assertSafeToolName(input.name);
@@ -28,6 +29,7 @@ export function createSessionManifest(input: {
     runtime: {
       kind: input.runtimeKind ?? DEMO_RUNTIME_KIND,
       entrypoint: input.entrypoint ?? DEMO_RUNTIME_ENTRYPOINT,
+      ...(input.runtimeConfig ? { config: input.runtimeConfig } : {}),
     },
     safety: {
       declaredSideEffects: [],

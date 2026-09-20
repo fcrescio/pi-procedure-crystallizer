@@ -18,6 +18,7 @@ export interface ToolManifestV1 {
   runtime: {
     kind: string;
     entrypoint: string;
+    config?: Record<string, unknown>;
     dependencies?: string[];
   };
   safety: {
@@ -38,3 +39,5 @@ export interface StoredTool {
 
 export const DEMO_RUNTIME_KIND = "demo";
 export const DEMO_RUNTIME_ENTRYPOINT = "builtin:session_echo";
+export const FIXTURE_RUNTIME_KIND = "fixture";
+export const FIXTURE_RUNTIME_ENTRYPOINT = "builtin:fixture_inventory";

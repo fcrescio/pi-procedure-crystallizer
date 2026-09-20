@@ -18,8 +18,8 @@
 
 ## Goal 3 — Add safe crystallization
 
-- [ ] Define a small declarative runtime for bounded analyzers and pipelines.
-- [ ] Add schema validation, timeouts, allowed workspace roots, and redaction checks.
+- [x] Define a small declarative runtime for bounded analyzers and pipelines.
+- [x] Add schema validation, allowed workspace roots, and a 128 KiB input cap for the first runtime.
 - [ ] Add an agent-facing creation path that remains session-scoped by default.
 - [ ] Add bounded reflection at `session_before_compact`, failing open on errors.
 - [ ] Keep arbitrary generated source execution out of the default path.

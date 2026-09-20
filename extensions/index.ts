@@ -1,8 +1,15 @@
 import os from "node:os";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { DEMO_RUNTIME_ENTRYPOINT, DEMO_RUNTIME_KIND, type StoredTool } from "../src/domain.js";
+import {
+  DEMO_RUNTIME_ENTRYPOINT,
+  DEMO_RUNTIME_KIND,
+  FIXTURE_RUNTIME_ENTRYPOINT,
+  FIXTURE_RUNTIME_KIND,
+  type StoredTool,
+} from "../src/domain.js";
 import { createSessionManifest } from "../src/manifest.js";
 import { assertSafeSessionKey } from "../src/paths.js";
 import { NoopReflectionEngine } from "../src/reflection.js";
@@ -13,6 +20,11 @@ const DEMO_PARAMETERS = Type.Object({
 });
 
 type DemoParameters = { text: string };
+const FIXTURE_PARAMETERS = Type.Object({
+  path: Type.String({ description: "Workspace-relative fixture path" }),
+});
+type FixtureParameters = { path: string };
+const MAX_FIXTURE_BYTES = 128 * 1024;
 
 function artifactRoot(): string {
   return path.resolve(
@@ -29,6 +41,10 @@ function currentSessionKey(ctx: ExtensionContext): string {
 
 function isDemoTool(tool: StoredTool): boolean {
   return tool.manifest.runtime.kind === DEMO_RUNTIME_KIND && tool.manifest.runtime.entrypoint === DEMO_RUNTIME_ENTRYPOINT;
+}
+
+function isFixtureTool(tool: StoredTool): boolean {
+  return tool.manifest.runtime.kind === FIXTURE_RUNTIME_KIND && tool.manifest.runtime.entrypoint === FIXTURE_RUNTIME_ENTRYPOINT;
 }
 
 function demoTool(tool: StoredTool): ToolDefinition<typeof DEMO_PARAMETERS> {
@@ -53,6 +69,48 @@ function executeDemo(tool: StoredTool, text: string) {
   };
 }
 
+async function executeFixture(tool: StoredTool, params: FixtureParameters, ctx: ExtensionContext) {
+  if (path.isAbsolute(params.path) || params.path.split(/[\\/]/u).includes("..")) {
+    throw new Error("Fixture path must be workspace-relative and cannot traverse parent directories");
+  }
+  const fixturePath = path.resolve(ctx.cwd, params.path);
+  const relative = path.relative(ctx.cwd, fixturePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Fixture path escapes the workspace");
+  const info = await stat(fixturePath);
+  if (!info.isFile()) throw new Error("Fixture path must identify a regular file");
+  if (info.size > MAX_FIXTURE_BYTES) throw new Error(`Fixture exceeds ${MAX_FIXTURE_BYTES} byte limit`);
+  const text = await readFile(fixturePath, "utf8");
+  const lines = text.length === 0 ? 0 : text.split(/\r?\n/u).length;
+  let jsonKind = "not-json";
+  try {
+    const parsed: unknown = JSON.parse(text);
+    jsonKind = Array.isArray(parsed) ? "array" : parsed !== null && typeof parsed === "object" ? "object" : typeof parsed;
+  } catch {
+    // Inventory remains useful for raw captures and other non-JSON fixtures.
+  }
+  return {
+    content: [{ type: "text" as const, text: `fixture_inventory: ${path.relative(ctx.cwd, fixturePath)} bytes=${info.size} lines=${lines} json=${jsonKind}` }],
+    details: { artifactId: tool.manifest.id, scope: tool.manifest.scope, originSession: tool.manifest.origin.sessionKey },
+  };
+}
+
+function fixtureTool(tool: StoredTool): ToolDefinition<typeof FIXTURE_PARAMETERS> {
+  return {
+    name: tool.manifest.name,
+    label: tool.manifest.name,
+    description: tool.manifest.description,
+    promptSnippet: "Inventory a bounded workspace-relative fixture without modifying it",
+    parameters: FIXTURE_PARAMETERS,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      return executeFixture(tool, params, ctx);
+    },
+  };
+}
+
+function isSupportedTool(tool: StoredTool): boolean {
+  return isDemoTool(tool) || isFixtureTool(tool);
+}
+
 function formatTool(tool: StoredTool): string {
   const { manifest } = tool;
   return `${manifest.name} [${manifest.scope}] — ${manifest.description} — ${tool.directory}`;
@@ -60,7 +118,7 @@ function formatTool(tool: StoredTool): string {
 
 function formatReview(tool: StoredTool): string {
   const { manifest } = tool;
-  const runnable = isDemoTool(tool) ? "runnable" : "unsupported-runtime";
+  const runnable = isDemoTool(tool) || isFixtureTool(tool) ? "runnable" : "unsupported-runtime";
   const effects = manifest.safety.declaredSideEffects.length > 0 ? manifest.safety.declaredSideEffects.join(", ") : "none";
   const dependencies = manifest.runtime.dependencies?.join(", ") || "none";
   return [
@@ -100,15 +158,16 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
   const reflection = new NoopReflectionEngine();
 
   const registerStoredTool = (tool: StoredTool): boolean => {
-    if (!isDemoTool(tool)) return false;
-    pi.registerTool(demoTool(tool));
+    if (isDemoTool(tool)) pi.registerTool(demoTool(tool));
+    else if (isFixtureTool(tool)) pi.registerTool(fixtureTool(tool));
+    else return false;
     return true;
   };
 
   const restoreTools = async (ctx: ExtensionContext): Promise<void> => {
     const sessionKey = currentSessionKey(ctx);
-    const globalTools = (await store.listGlobal()).filter(isDemoTool);
-    const sessionTools = (await store.listSession(sessionKey)).filter(isDemoTool);
+    const globalTools = (await store.listGlobal()).filter(isSupportedTool);
+    const sessionTools = (await store.listSession(sessionKey)).filter(isSupportedTool);
     const registered = new Set<string>();
 
     for (const tool of globalTools) {
@@ -161,8 +220,10 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
             if (!global) throw new Error(`Tool not found: ${name}`);
             tool = global;
           }
-          if (!isDemoTool(tool)) throw new Error(`Tool ${name} has no supported deterministic test runtime`);
-          const result = executeDemo(tool, "tools-test");
+          if (!isSupportedTool(tool)) throw new Error(`Tool ${name} has no supported deterministic test runtime`);
+          const result = isDemoTool(tool)
+            ? executeDemo(tool, "tools-test")
+            : await executeFixture(tool, { path: String(tool.manifest.runtime.config?.defaultPath ?? "") }, ctx);
           ctx.ui.notify(`Test passed for ${name}: ${result.content[0]?.type === "text" ? result.content[0].text : "ok"}`, "info");
           return;
         }
@@ -223,6 +284,34 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
         ctx.ui.notify(`Created and registered session_echo at ${stored.directory}.`, "info");
       } catch (error) {
         ctx.ui.notify(`Demo tool creation failed: ${String(error)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("tools-create-fixture-inventory", {
+    description: "Create a bounded read-only fixture inventory session tool",
+    handler: async (args, ctx) => {
+      try {
+        const defaultPath = args.trim();
+        if (!defaultPath || path.isAbsolute(defaultPath) || defaultPath.split(/[\\/]/u).includes("..")) {
+          throw new Error("Usage: /tools-create-fixture-inventory <workspace-relative-default-path>");
+        }
+        const sessionKey = currentSessionKey(ctx);
+        const stored = await store.putSessionManifest(
+          sessionKey,
+          createSessionManifest({
+            sessionKey,
+            name: "fixture_inventory",
+            description: "Inventory one bounded workspace-relative fixture without modifying it.",
+            runtimeKind: FIXTURE_RUNTIME_KIND,
+            entrypoint: FIXTURE_RUNTIME_ENTRYPOINT,
+            runtimeConfig: { defaultPath },
+          }),
+        );
+        registerStoredTool(stored);
+        ctx.ui.notify(`Created and registered fixture_inventory at ${stored.directory}.`, "info");
+      } catch (error) {
+        ctx.ui.notify(`Fixture tool creation failed: ${String(error)}`, "error");
       }
     },
   });

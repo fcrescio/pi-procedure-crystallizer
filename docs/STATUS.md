@@ -17,7 +17,7 @@ Working now:
 - `session_before_compact` runs only the bounded no-op reflection engine and returns nothing, leaving Pi's native compaction in control;
 - unsafe names/session keys are rejected, artifacts are isolated by session, and promotion is never implicit.
 
-Storage defaults to `<PI_CODING_AGENT_DIR>/session-tools`; tests and the manual harness can override it with `PI_SESSION_TOOLS_ROOT`. The first runtime is deliberately constrained to `builtin:session_echo`.
+Storage defaults to `<PI_CODING_AGENT_DIR>/session-tools`; tests and the manual harness can override it with `PI_SESSION_TOOLS_ROOT`. Supported runtimes are deliberately constrained to `builtin:session_echo` and read-only `builtin:fixture_inventory`.
 
 ## Verification performed
 
@@ -55,10 +55,10 @@ Call session_echo with text exactly global-ok, and no other tool.
 
 ## Known limitations
 
-- The constrained demo runtime is the only executable format; no arbitrary generated TypeScript is executed.
+- Runtime execution remains constrained to the two built-ins; no arbitrary generated TypeScript is executed. `fixture_inventory` is available through `/tools-create-fixture-inventory <relative-path>` and caps inputs at 128 KiB.
 - Branch inheritance semantics are deferred; artifacts are keyed to the exact session ID.
 - The harness does not yet cover same-session process restart and fresh-session absence in one run; those behaviors are covered by the earlier manual lifecycle run and should be folded into the harness next.
 
 ## Next smallest task
 
-Extend the harness with process restart/resume and a fresh-session assertion, then add the first safe declarative crystallization runtime.
+Extend the harness with process restart/resume and a fresh-session assertion, then add an agent-facing bounded crystallization path for declarative fixture tools.

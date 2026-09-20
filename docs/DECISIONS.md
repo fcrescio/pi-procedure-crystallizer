@@ -23,3 +23,7 @@ The first milestone uses a deterministic/manual demo tool if necessary. Do not s
 The first Pi adapter materializes only the deterministic `builtin:session_echo` runtime. Manifests live on disk; Pi dynamically registers this built-in implementation on `session_start` and after creation/promotion. Other runtime kinds are ignored until a separately reviewed execution strategy exists.
 
 Artifacts default to `<PI_CODING_AGENT_DIR>/session-tools` (or `PI_SESSION_TOOLS_ROOT` for tests), with session IDs obtained from Pi's `SessionManager.getSessionId()` and global artifacts in a separate `global/` directory.
+
+## D-006 — First declarative runtime is bounded fixture inventory
+
+The next runtime is `builtin:fixture_inventory`: read-only, workspace-relative, dependency-free, and capped at 128 KiB. It rejects traversal, directories, and oversized files. This gives RE workflows a reusable artifact without opening arbitrary generated source execution.
