@@ -13,8 +13,8 @@
 
 - [x] Implement `/tools review` with provenance, usage, validation state, and risks.
 - [x] Implement `/tools test <name>` with bounded deterministic examples.
-- [ ] Test delete, review, and promotion confirmation paths.
-- [ ] Preserve the explicit-promotion invariant in unit and integration tests.
+- [x] Test delete, review, and promotion confirmation paths (manual RPC acceptance plus store-level tests).
+- [x] Preserve the explicit-promotion invariant in unit and integration tests.
 
 ## Goal 3 — Add safe crystallization
 
@@ -22,7 +22,7 @@
 - [x] Add schema validation, allowed workspace roots, and a 128 KiB input cap for the first runtime.
 - [x] Add an agent-facing creation path that remains session-scoped by default.
 - [x] Add bounded reflection at `session_before_compact`, failing open on errors.
-- [ ] Keep arbitrary generated source execution out of the default path.
+- [x] Keep arbitrary generated source execution out of the default path.
 
 ## Goal 4 — Validate with the Lookcam RE case
 
@@ -30,5 +30,5 @@
 - [x] Reuse at least one crystallized tool across multiple RE steps and a compaction.
 - [x] Record confirmed facts, hypotheses, evidence, and blockers.
 - [ ] Add APK/capture/device evidence when available; never invent protocol facts. (APK acquisition is currently blocked by public-source download gates.)
-- [ ] Promote only a reviewed, explicitly approved tool.
-- [ ] Update `docs/STATUS.md` with the complete evidence trail.
+- [x] Promote only a reviewed, explicitly approved tool (verified with `session_echo`; RE fixture remained unpromoted).
+- [x] Update `docs/STATUS.md` with the complete evidence trail.

@@ -25,7 +25,7 @@ Storage defaults to `<PI_CODING_AGENT_DIR>/session-tools`; tests and the manual 
 Local verification against the installed Pi package:
 
 - Pi `0.84.4` declarations/source verified for `session_start`, `session_shutdown`/runtime replacement, `session_before_compact`, `SessionManager.getSessionId()`, `registerTool()`, `registerCommand()`, `setActiveTools()`, and UI confirmation.
-- `npm run check`: typecheck passed; 9 unit tests passed.
+- `npm run check`: typecheck passed; 12 unit tests passed.
 - Separate Docker container using `vllm-local/qwen3.8-27b` reached the local vLLM endpoint and loaded the extension.
 - Session A: created, listed, invoked (`session_echo: lifecycle-ok`), exited, resumed, listed, and invoked again (`session_echo: resume-ok`).
 - Fresh session B: session tool absent.
@@ -35,6 +35,7 @@ Local verification against the installed Pi package:
 - The `/goal` task reached a recorded turn usage of about 46.8k tokens, continued into a second turn, and GLLA displayed `compacting…` at the native compaction boundary. The model then resumed work and wrote new post-compaction artifacts (`.gitignore`, `input-inventory.md`) in the isolated workspace. The running `pi-interactive` container was not touched.
 - The deterministic RPC harness now performs an explicit native Pi compaction after three bounded fixture prompts. In the vLLM container it observed `compaction_start`, then `compaction_end` with `tokensBefore: 37698` and `estimatedTokensAfter: 34271`, and successfully invoked `session_echo: compacted-ok` afterward.
 - Unit coverage now exercises explicit-candidate extraction, duplicate filtering, cancellation/overflow skips, and bounded materialization ordering. No LLM reflection or arbitrary source execution is involved.
+- The latest Docker harness deleted the agent-created fixture manifest immediately before compaction; the hook recovered it with `origin.trigger=pre_compaction`, and the recovered tool passed post-compaction invocation, resume smoke tests, and fresh-session isolation.
 - The same harness now has a real fixture and asks the model to call `session_tool_create`. It observed successful creation of `fixture_inventory`, invoked both tools after compaction, restarted the saved session and passed `/tools test session_echo` plus `/tools test fixture_inventory`, then started a fresh session where neither session tool leaked.
 - The run intentionally had no Lookcam APK, captures, firmware, or device available. The goal therefore followed the fixture-driven/offline branch and did not probe the LAN or invent protocol facts.
 - A separate long `/goal` run used the copied goal extensions in its own Docker container with `thinking medium`, 64k context, and the local vLLM backend. It produced a durable Lookcam RE ledger, evidence inventory, static-analysis workflow, hypothesis ledger, synthetic fixture format/generator, client skeleton, audit report, and session-tool log. Native threshold compaction fired repeatedly; the session-scoped `fixture_inventory` manifest remained present and the tool was invoked after compaction.
@@ -62,9 +63,9 @@ Call session_echo with text exactly global-ok, and no other tool.
 
 - Runtime execution remains constrained to the two built-ins; no arbitrary generated TypeScript is executed. `fixture_inventory` is available through `/tools-create-fixture-inventory <relative-path>` and caps inputs at 128 KiB.
 - Branch inheritance semantics are deferred; artifacts are keyed to the exact session ID.
-- The harness does not yet cover delete/review/promotion confirmation paths in one automated run; the earlier manual run covers promotion and the unit suite covers promotion/deletion invariants.
+- Delete/review/promotion were covered by the manual Pi acceptance flow and store-level tests; the explicit-promotion invariant remains enforced at both layers.
 - A real Lookcam APK/capture is still required before implementing protocol/client behavior; the isolated web acquisition attempt was blocked by source authentication/bot protection.
 
 ## Next smallest task
 
-Repeat the native harness with a deliberately missing-but-explicit fixture manifest to verify pre-compaction recovery, then add a user-supplied Lookcam APK and run the static-analysis workflow.
+Add a user-supplied Lookcam APK or accessible capture and run the static-analysis workflow; protocol/client implementation remains intentionally gated on product-specific evidence.
