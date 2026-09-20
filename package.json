@@ -1,0 +1,29 @@
+{
+  "name": "pi-session-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Session-scoped procedural tools for Pi, crystallized before compaction and explicitly promotable by the user.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["pi-package", "pi", "agent", "tools", "compaction", "procedural-memory"],
+  "files": ["extensions", "src", "docs", "README.md", "LONG_TERM_GOAL.md"],
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typebox": "*",
+    "typescript": "^5.8.0"
+  }
+}
