@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -115,6 +115,13 @@ try {
   await prompt("Call session_tool_create exactly once with defaultPath lifecycle-fixture.json. Do not call any other tool.");
 
   const filler = "Preserve this bounded lifecycle-test marker exactly: SESSION_TOOL_COMPACTION_MARKER. ".repeat(800);
+  const sessionToolDirectory = (await readdir(path.join(artifactRoot, "sessions"), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(artifactRoot, "sessions", entry.name, "tools", "fixture_inventory"))[0];
+  if (!sessionToolDirectory) throw new Error("Agent-created fixture tool was not persisted");
+  // Exercise bounded pre-compaction crystallization: the explicit tool-call remains
+  // in branchEntries, while the persisted artifact is recovered by the hook.
+  await rm(sessionToolDirectory, { recursive: true, force: true });
   await prompt(`Read this fixture and reply exactly ACK. Do not call tools. ${filler}`);
   await prompt(`Read this second fixture and reply exactly ACK. Do not call tools. ${filler}`);
   await prompt(`Read this third fixture and reply exactly ACK. Do not call tools. ${filler}`);
@@ -132,6 +139,18 @@ try {
   if (!created) throw new Error("The agent did not create fixture_inventory through session_tool_create");
   if (!invoked) throw new Error("session_echo was not invoked successfully after the lifecycle prompts");
   if (!inventoried) throw new Error("fixture_inventory was not invoked successfully after compaction");
+  const recoveredManifest = await (async () => {
+    const sessions = await readdir(path.join(artifactRoot, "sessions"), { withFileTypes: true });
+    for (const session of sessions.filter((entry) => entry.isDirectory())) {
+      const manifestPath = path.join(artifactRoot, "sessions", session.name, "tools", "fixture_inventory", "manifest.json");
+      try {
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        if (manifest.origin?.trigger === "pre_compaction") return manifest;
+      } catch { /* keep searching */ }
+    }
+    return undefined;
+  })();
+  if (!recoveredManifest) throw new Error("Pre-compaction crystallization did not recover fixture_inventory");
   const sessionFile = (await readdir(sessionDir)).find((entry) => entry.endsWith(".jsonl"));
   if (!sessionFile) throw new Error("Pi did not persist a session file");
 

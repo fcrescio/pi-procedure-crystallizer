@@ -21,7 +21,7 @@
 - [x] Define a small declarative runtime for bounded analyzers and pipelines.
 - [x] Add schema validation, allowed workspace roots, and a 128 KiB input cap for the first runtime.
 - [x] Add an agent-facing creation path that remains session-scoped by default.
-- [ ] Add bounded reflection at `session_before_compact`, failing open on errors.
+- [x] Add bounded reflection at `session_before_compact`, failing open on errors.
 - [ ] Keep arbitrary generated source execution out of the default path.
 
 ## Goal 4 — Validate with the Lookcam RE case

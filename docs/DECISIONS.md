@@ -27,3 +27,7 @@ Artifacts default to `<PI_CODING_AGENT_DIR>/session-tools` (or `PI_SESSION_TOOLS
 ## D-006 — First declarative runtime is bounded fixture inventory
 
 The next runtime is `builtin:fixture_inventory`: read-only, workspace-relative, dependency-free, and capped at 128 KiB. It rejects traversal, directories, and oversized files. This gives RE workflows a reusable artifact without opening arbitrary generated source execution.
+
+## D-007 — Pre-compaction crystallization only honors explicit bounded requests
+
+The first automatic crystallizer scans a bounded suffix of recent Pi entries and accepts only structured `session_tool_create` calls previously emitted by the agent. It does not infer tools from prose, shell commands, or generated source. Materialization still requires a workspace-relative regular file within the fixture size cap; overflow and cancellation skip crystallization, and all failures remain fail-open so Pi's native compaction continues.

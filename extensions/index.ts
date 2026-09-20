@@ -12,7 +12,7 @@ import {
 } from "../src/domain.js";
 import { createSessionManifest } from "../src/manifest.js";
 import { assertSafeSessionKey } from "../src/paths.js";
-import { NoopReflectionEngine } from "../src/reflection.js";
+import { BoundedReflectionEngine } from "../src/reflection.js";
 import { ArtifactStore } from "../src/store.js";
 
 const DEMO_PARAMETERS = Type.Object({
@@ -163,7 +163,6 @@ async function requireConfirmation(ctx: ExtensionCommandContext, title: string, 
 
 export default function sessionToolsExtension(pi: ExtensionAPI) {
   const store = new ArtifactStore({ root: artifactRoot() });
-  const reflection = new NoopReflectionEngine();
 
   const registerStoredTool = (tool: StoredTool): boolean => {
     if (isDemoTool(tool)) pi.registerTool(demoTool(tool));
@@ -171,6 +170,36 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
     else return false;
     return true;
   };
+
+  const reflection = new BoundedReflectionEngine({
+    materialize: async (candidate, input) => {
+      assertSafeFixturePath(candidate.defaultPath);
+      const cwd = input.cwd ?? process.cwd();
+      const fixturePath = path.resolve(cwd, candidate.defaultPath);
+      const relative = path.relative(cwd, fixturePath);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Fixture path escapes the workspace");
+      const info = await stat(fixturePath);
+      if (!info.isFile()) throw new Error("Fixture path must identify a regular file");
+      if (info.size > MAX_FIXTURE_BYTES) throw new Error(`Fixture exceeds ${MAX_FIXTURE_BYTES} byte limit`);
+      const existing = (await store.listSession(input.sessionKey)).find((tool) => tool.manifest.name === "fixture_inventory");
+      if (existing) return;
+      const stored = await store.putSessionManifest(
+        input.sessionKey,
+        createSessionManifest({
+          sessionKey: input.sessionKey,
+          name: "fixture_inventory",
+          description: "Inventory one bounded workspace-relative fixture without modifying it.",
+          trigger: "pre_compaction",
+          runtimeKind: FIXTURE_RUNTIME_KIND,
+          entrypoint: FIXTURE_RUNTIME_ENTRYPOINT,
+          runtimeConfig: { defaultPath: candidate.defaultPath },
+          ...(candidate.sourceEntryId ? { sourceEntryIds: [candidate.sourceEntryId] } : {}),
+          taskSummary: "Recovered explicit session_tool_create request at the compaction boundary.",
+        }),
+      );
+      registerStoredTool(stored);
+    },
+  });
 
   pi.registerTool({
     name: "session_tool_create",
@@ -363,6 +392,8 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
       await reflection.maybeCrystallize({
         reason: event.reason,
         sessionKey: currentSessionKey(ctx),
+        cwd: ctx.cwd,
+        branchEntries: event.branchEntries,
         signal: event.signal,
       });
     } catch (error) {

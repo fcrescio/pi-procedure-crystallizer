@@ -7,9 +7,11 @@ export function createSessionManifest(input: {
   name: string;
   description: string;
   trigger?: CreationTrigger;
-    runtimeKind?: string;
-    entrypoint?: string;
-    runtimeConfig?: Record<string, unknown>;
+  runtimeKind?: string;
+  entrypoint?: string;
+  runtimeConfig?: Record<string, unknown>;
+  sourceEntryIds?: string[];
+  taskSummary?: string;
 }): ToolManifestV1 {
   assertSafeSessionKey(input.sessionKey);
   assertSafeToolName(input.name);
@@ -25,6 +27,8 @@ export function createSessionManifest(input: {
     origin: {
       sessionKey: input.sessionKey,
       trigger: input.trigger ?? "manual",
+      ...(input.sourceEntryIds ? { sourceEntryIds: input.sourceEntryIds } : {}),
+      ...(input.taskSummary ? { taskSummary: input.taskSummary } : {}),
     },
     runtime: {
       kind: input.runtimeKind ?? DEMO_RUNTIME_KIND,
