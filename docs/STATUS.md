@@ -36,6 +36,8 @@ Local verification against the installed Pi package:
 - The deterministic RPC harness now performs an explicit native Pi compaction after three bounded fixture prompts. In the vLLM container it observed `compaction_start`, then `compaction_end` with `tokensBefore: 37698` and `estimatedTokensAfter: 34271`, and successfully invoked `session_echo: compacted-ok` afterward.
 - The same harness now has a real fixture and asks the model to call `session_tool_create`. It observed successful creation of `fixture_inventory`, invoked both tools after compaction, restarted the saved session and passed `/tools test session_echo` plus `/tools test fixture_inventory`, then started a fresh session where neither session tool leaked.
 - The run intentionally had no Lookcam APK, captures, firmware, or device available. The goal therefore followed the fixture-driven/offline branch and did not probe the LAN or invent protocol facts.
+- A separate long `/goal` run used the copied goal extensions in its own Docker container with `thinking medium`, 64k context, and the local vLLM backend. It produced a durable Lookcam RE ledger, evidence inventory, static-analysis workflow, hypothesis ledger, synthetic fixture format/generator, client skeleton, audit report, and session-tool log. Native threshold compaction fired repeatedly; the session-scoped `fixture_inventory` manifest remained present and the tool was invoked after compaction.
+- The requested representative APK phase identified the official Google Play package `com.view.ppcs` and an APKCombo page for `V1.3.7`. Google Play required authentication; the APKCombo redirect reached an APKPure CDN bot gate (`403`). The download script applied a ZIP/APK magic-byte gate and saved no unverified file. No APK-specific claims were promoted to facts. `pi-interactive` remained running and untouched.
 
 The Pi commands used for the proven portions were:
 
@@ -60,7 +62,8 @@ Call session_echo with text exactly global-ok, and no other tool.
 - Runtime execution remains constrained to the two built-ins; no arbitrary generated TypeScript is executed. `fixture_inventory` is available through `/tools-create-fixture-inventory <relative-path>` and caps inputs at 128 KiB.
 - Branch inheritance semantics are deferred; artifacts are keyed to the exact session ID.
 - The harness does not yet cover delete/review/promotion confirmation paths in one automated run; the earlier manual run covers promotion and the unit suite covers promotion/deletion invariants.
+- A real Lookcam APK/capture is still required before implementing protocol/client behavior; the isolated web acquisition attempt was blocked by source authentication/bot protection.
 
 ## Next smallest task
 
-Add bounded crystallization at `session_before_compact` and then run the isolated long Lookcam `/goal` case with an explicit session-tool reuse step.
+Add bounded crystallization at `session_before_compact`, then repeat the APK analysis once the user supplies the APK or an accessible download artifact.

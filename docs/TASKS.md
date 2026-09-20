@@ -26,9 +26,9 @@
 
 ## Goal 4 — Validate with the Lookcam RE case
 
-- [ ] Run a long `/goal` in an isolated container with the Pi goal extensions.
-- [ ] Reuse at least one crystallized tool across multiple RE steps and a compaction.
-- [ ] Record confirmed facts, hypotheses, evidence, and blockers.
-- [ ] Add APK/capture/device evidence when available; never invent protocol facts.
+- [x] Run a long `/goal` in an isolated container with the Pi goal extensions.
+- [x] Reuse at least one crystallized tool across multiple RE steps and a compaction.
+- [x] Record confirmed facts, hypotheses, evidence, and blockers.
+- [ ] Add APK/capture/device evidence when available; never invent protocol facts. (APK acquisition is currently blocked by public-source download gates.)
 - [ ] Promote only a reviewed, explicitly approved tool.
 - [ ] Update `docs/STATUS.md` with the complete evidence trail.
