@@ -43,3 +43,5 @@ export const FIXTURE_RUNTIME_KIND = "fixture";
 export const FIXTURE_RUNTIME_ENTRYPOINT = "builtin:fixture_inventory";
 export const STRINGS_RUNTIME_KIND = "native-analysis";
 export const STRINGS_RUNTIME_ENTRYPOINT = "builtin:native_strings_search";
+export const GENERATED_RUNTIME_KIND = "generated-procedure";
+export const GENERATED_RUNTIME_ENTRYPOINT = "builtin:generated_procedure";

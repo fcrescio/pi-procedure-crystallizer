@@ -1,5 +1,5 @@
 {
-  "name": "pi-session-tools",
+  "name": "pi-procedure-crystallizer",
   "version": "0.1.0",
   "description": "Session-scoped procedural tools for Pi, crystallized before compaction and explicitly promotable by the user.",
   "type": "module",
@@ -34,12 +34,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/fcrescio/pi-session-tools.git"
+    "url": "git+ssh://git@github.com/fcrescio/pi-procedure-crystallizer.git"
   },
   "bugs": {
-    "url": "https://github.com/fcrescio/pi-session-tools/issues"
+    "url": "https://github.com/fcrescio/pi-procedure-crystallizer/issues"
   },
-  "homepage": "https://github.com/fcrescio/pi-session-tools#readme",
+  "homepage": "https://github.com/fcrescio/pi-procedure-crystallizer#readme",
   "publishConfig": {
     "access": "public"
   },

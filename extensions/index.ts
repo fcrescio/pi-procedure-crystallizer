@@ -1,5 +1,5 @@
 import os from "node:os";
-import { readFile, stat } from "node:fs/promises";
+import { appendFile, readFile, stat } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -12,12 +12,15 @@ import {
   FIXTURE_RUNTIME_KIND,
   STRINGS_RUNTIME_ENTRYPOINT,
   STRINGS_RUNTIME_KIND,
+  GENERATED_RUNTIME_ENTRYPOINT,
+  GENERATED_RUNTIME_KIND,
   type StoredTool,
 } from "../src/domain.js";
 import { createSessionManifest } from "../src/manifest.js";
-import { assertSafeSessionKey } from "../src/paths.js";
+import { assertSafeSessionKey, assertSafeToolName } from "../src/paths.js";
 import { BoundedReflectionEngine, findRepeatedReadOnlyBashCandidates, replaceCrystallizedProcedureDetails } from "../src/reflection.js";
 import type { CrystallizedProcedure, ProcedureCandidate } from "../src/reflection.js";
+import { buildProcedureSweepPrompt, collectBashProcedureRecords, parseProcedureSweepResponse } from "../src/procedure-sweep.js";
 import { ArtifactStore } from "../src/store.js";
 
 const DEMO_PARAMETERS = Type.Object({
@@ -37,6 +40,22 @@ const MAX_FIXTURE_BYTES = 128 * 1024;
 const MAX_NATIVE_ANALYSIS_BYTES = 32 * 1024 * 1024;
 const MAX_NATIVE_OUTPUT_BYTES = 32 * 1024;
 const execFile = promisify(execFileCallback);
+const GENERATED_PARAMETERS = Type.Object({
+  input: Type.Record(Type.String(), Type.Unknown(), { description: "Named inputs for the generated session procedure" }),
+});
+type GeneratedParameters = { input: Record<string, unknown> };
+const MAX_GENERATED_OUTPUT_BYTES = 64 * 1024;
+const GENERATED_TIMEOUT_MS = 30_000;
+
+async function logSweepDebug(event: string, details: Record<string, unknown>): Promise<void> {
+  const target = process.env.PI_SESSION_TOOLS_SWEEP_LOG;
+  if (!target) return;
+  try {
+    await appendFile(target, `${JSON.stringify({ at: new Date().toISOString(), event, ...details })}\n`, "utf8");
+  } catch {
+    // Debug logging must never affect the compaction path.
+  }
+}
 
 function artifactRoot(): string {
   return path.resolve(
@@ -61,6 +80,57 @@ function isFixtureTool(tool: StoredTool): boolean {
 
 function isStringsTool(tool: StoredTool): boolean {
   return tool.manifest.runtime.kind === STRINGS_RUNTIME_KIND && tool.manifest.runtime.entrypoint === STRINGS_RUNTIME_ENTRYPOINT;
+}
+
+function isGeneratedTool(tool: StoredTool): boolean {
+  return tool.manifest.runtime.kind === GENERATED_RUNTIME_KIND && tool.manifest.runtime.entrypoint === GENERATED_RUNTIME_ENTRYPOINT;
+}
+
+async function executeGenerated(tool: StoredTool, params: GeneratedParameters, ctx: ExtensionContext) {
+  const source = tool.manifest.runtime.config?.source;
+  if (typeof source !== "string") throw new Error("Generated tool has no implementation source");
+  const input = sanitizeGeneratedInput(tool, params.input);
+  const invocation = `${source}\nconst __result = await run(${JSON.stringify(input)}, { cwd: ${JSON.stringify(ctx.cwd)} });\nprocess.stdout.write(JSON.stringify(__result ?? null));`;
+  const result = await execFile("node", ["--input-type=module", "--eval", invocation], {
+    cwd: ctx.cwd,
+    env: { PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin", PI_TOOL_CWD: ctx.cwd },
+    timeout: GENERATED_TIMEOUT_MS,
+    maxBuffer: MAX_GENERATED_OUTPUT_BYTES * 2,
+    windowsHide: true,
+  });
+  const output = result.stdout.slice(0, MAX_GENERATED_OUTPUT_BYTES);
+  return {
+    content: [{ type: "text" as const, text: `${tool.manifest.name}: ${output}` }],
+    details: { artifactId: tool.manifest.id, scope: tool.manifest.scope, originSession: tool.manifest.origin.sessionKey, generated: true },
+  };
+}
+
+function sanitizeGeneratedInput(tool: StoredTool, input: Record<string, unknown>): Record<string, unknown> {
+  const declared = tool.manifest.runtime.config?.parameters;
+  if (!Array.isArray(declared)) return { ...input };
+  const output = { ...input };
+  for (const parameter of declared) {
+    if (!parameter || typeof parameter !== "object") continue;
+    const record = parameter as Record<string, unknown>;
+    if (record.type !== "path" || typeof record.name !== "string" || output[record.name] === undefined) continue;
+    const value = output[record.name];
+    if (typeof value !== "string") throw new Error(`Generated path parameter ${record.name} must be a string`);
+    assertSafeFixturePath(value);
+  }
+  return output;
+}
+
+function generatedTool(tool: StoredTool): ToolDefinition<typeof GENERATED_PARAMETERS> {
+  return {
+    name: tool.manifest.name,
+    label: tool.manifest.name,
+    description: tool.manifest.description,
+    promptSnippet: "Run a bounded session-scoped generated procedure with named inputs",
+    parameters: GENERATED_PARAMETERS,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      return executeGenerated(tool, params, ctx);
+    },
+  };
 }
 
 function demoTool(tool: StoredTool): ToolDefinition<typeof DEMO_PARAMETERS> {
@@ -165,7 +235,7 @@ function fixtureTool(tool: StoredTool): ToolDefinition<typeof FIXTURE_PARAMETERS
 }
 
 function isSupportedTool(tool: StoredTool): boolean {
-  return isDemoTool(tool) || isFixtureTool(tool) || isStringsTool(tool);
+  return isDemoTool(tool) || isFixtureTool(tool) || isStringsTool(tool) || isGeneratedTool(tool);
 }
 
 function assertSafeFixturePath(value: string): void {
@@ -191,7 +261,7 @@ function formatTool(tool: StoredTool): string {
 
 function formatReview(tool: StoredTool): string {
   const { manifest } = tool;
-  const runnable = isDemoTool(tool) || isFixtureTool(tool) ? "runnable" : "unsupported-runtime";
+  const runnable = isDemoTool(tool) || isFixtureTool(tool) || isStringsTool(tool) || isGeneratedTool(tool) ? "runnable" : "unsupported-runtime";
   const effects = manifest.safety.declaredSideEffects.length > 0 ? manifest.safety.declaredSideEffects.join(", ") : "none";
   const dependencies = manifest.runtime.dependencies?.join(", ") || "none";
   return [
@@ -233,6 +303,7 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
     if (isDemoTool(tool)) pi.registerTool(demoTool(tool));
     else if (isFixtureTool(tool)) pi.registerTool(fixtureTool(tool));
     else if (isStringsTool(tool)) pi.registerTool(stringsTool(tool));
+    else if (isGeneratedTool(tool)) pi.registerTool(generatedTool(tool));
     else return false;
     return true;
   };
@@ -487,6 +558,107 @@ export default function sessionToolsExtension(pi: ExtensionAPI) {
 
   pi.on("session_before_compact", async (event, ctx) => {
     try {
+      if (event.reason !== "overflow" && ctx.model) {
+        const records = collectBashProcedureRecords(event.branchEntries);
+        await logSweepDebug("sweep_start", {
+          reason: event.reason,
+          provider: ctx.model.provider,
+          model: ctx.model.id,
+          recordCount: records.length,
+          records,
+        });
+        if (records.length > 0) {
+          // This is a bounded structured-output pass, not an agent turn. Use
+          // Pi's provider-neutral simple stream with explicit reasoning off.
+          // Pi 0.84.4 exposes this on the concrete provider rather than on
+          // the ModelRegistry facade:
+          // The installed runtime accepts "off" for reasoning-capable
+          // providers (including qwen chat templates), even though the older
+          // exported type omits that literal.
+          // Calling `complete()` here can inherit provider defaults and spend
+          // the entire bounded output budget on hidden reasoning before emitting
+          // the JSON that the parser needs.
+          const provider = ctx.modelRegistry.getProvider(ctx.model.provider);
+          if (!provider?.streamSimple) throw new Error(`Provider ${ctx.model.provider} has no simple stream`);
+          const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
+          if (!auth.ok) throw new Error(auth.error);
+          const sweepContext = {
+            messages: [{
+              role: "user" as const,
+              content: [{ type: "text" as const, text: buildProcedureSweepPrompt(records) }],
+              timestamp: Date.now(),
+            }],
+          } as Parameters<typeof provider.streamSimple>[1];
+          const response = await provider.streamSimple(
+            ctx.model,
+            sweepContext,
+            {
+              maxTokens: 4096,
+              // Pi's installed runtime accepts "off" (the CLI uses it), but
+              // the older exported ThinkingLevel type omits that value.
+              reasoning: "off" as NonNullable<Parameters<typeof provider.streamSimple>[2]>["reasoning"],
+              signal: event.signal,
+              apiKey: auth.apiKey,
+              headers: auth.headers,
+              ...(auth.baseUrl ? { baseUrl: auth.baseUrl } : {}),
+              ...(auth.env ? { env: auth.env } : {}),
+            },
+          ).result();
+          const responseText = response.content
+            .filter((part): part is { type: "text"; text: string } => part.type === "text")
+            .map((part) => part.text)
+            .join("\n");
+          await logSweepDebug("sweep_response", {
+            stopReason: response.stopReason,
+            errorMessage: response.errorMessage,
+            contentChars: responseText.length,
+            content: responseText,
+          });
+          if (response.stopReason !== "aborted") {
+            const parsed = parseProcedureSweepResponse(responseText, new Set(records.map((record) => record.entryId)));
+            await logSweepDebug("sweep_parsed", {
+              errors: parsed.errors,
+              candidates: parsed.response?.candidates.map((candidate) => candidate.name) ?? [],
+              rejected: parsed.response?.rejected ?? [],
+            });
+            if (parsed.errors.length > 0) {
+              ctx.ui.notify(`Procedure sweep validation skipped ${parsed.errors.length} invalid model field(s).`, "warning");
+            }
+            if (parsed.response && parsed.response.candidates.length > 0) {
+              let materialized = 0;
+              for (const candidate of parsed.response.candidates) {
+                try {
+                  assertSafeToolName(candidate.name);
+                  const sessionKey = currentSessionKey(ctx);
+                  const existing = (await store.listSession(sessionKey)).find(tool => tool.manifest.name === candidate.name);
+                  if (existing) continue;
+                  const stored = await store.putSessionManifest(sessionKey, createSessionManifest({
+                    sessionKey,
+                    name: candidate.name,
+                    description: candidate.purpose,
+                    trigger: "pre_compaction",
+                    runtimeKind: GENERATED_RUNTIME_KIND,
+                    entrypoint: GENERATED_RUNTIME_ENTRYPOINT,
+                    runtimeConfig: {
+                      source: candidate.implementation,
+                      parameters: candidate.parameters,
+                      examples: candidate.examples,
+                      observedOperations: candidate.observedOperations,
+                      safeRuntimePlan: candidate.safeRuntimePlan,
+                    },
+                    sourceEntryIds: candidate.evidenceEntryIds,
+                    taskSummary: "Model-assisted pre-compaction procedure sweep.",
+                  }));
+                  if (registerStoredTool(stored)) materialized += 1;
+                } catch {
+                  // Candidate materialization is best-effort; native compaction must proceed.
+                }
+              }
+              ctx.ui.notify(`Procedure sweep found ${parsed.response.candidates.length} candidate(s) and materialized ${materialized} session tool(s).`, "info");
+            }
+          }
+        }
+      }
       const observed = findRepeatedReadOnlyBashCandidates(event.branchEntries);
       if (observed.length > 0) {
         ctx.ui.notify(

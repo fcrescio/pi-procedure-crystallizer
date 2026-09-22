@@ -2,7 +2,7 @@
 
 ## Product statement
 
-`pi-session-tools` preserves useful executable procedures discovered during a Pi session as tools attached to that session. It is designed primarily to protect procedural knowledge from context compaction. Users explicitly review and promote selected session tools to global scope.
+`pi-procedure-crystallizer` preserves useful executable procedures discovered during a Pi session as tools attached to that session. It is designed primarily to protect procedural knowledge from context compaction. Users explicitly review and promote selected session tools to global scope.
 
 ## Actors
 

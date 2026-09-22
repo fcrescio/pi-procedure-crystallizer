@@ -1,6 +1,6 @@
 ---
 name: session-tools-workflow
-description: Use pi-session-tools' session-scoped procedural tools during long-running work, especially before and after compaction.
+description: Use pi-procedure-crystallizer's session-scoped procedural tools during long-running work, especially before and after compaction.
 ---
 
 # Session tools workflow

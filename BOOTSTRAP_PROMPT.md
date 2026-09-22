@@ -1,6 +1,6 @@
 # Bootstrap prompt for Codex
 
-You are implementing the first vertical slice of `pi-session-tools`, a Pi extension for session-scoped procedural memory.
+You are implementing the first vertical slice of `pi-procedure-crystallizer`, a Pi extension for session-scoped procedural memory.
 
 Start by reading, in order:
 

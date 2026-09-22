@@ -92,7 +92,7 @@ export function replaceCrystallizedProcedureDetails(
 
 function crystallizationMarker(procedure: CrystallizedProcedure): string {
   const { candidate } = procedure;
-  return `[pi-session-tools] Crystallized ${procedure.toolName}: repeated read-only ${candidate.signature} procedure observed ${candidate.occurrences} times. Use the session-scoped tool instead; original command results remain in the immutable session log. Example: ${candidate.command}`;
+  return `[pi-procedure-crystallizer] Crystallized ${procedure.toolName}: repeated read-only ${candidate.signature} procedure observed ${candidate.occurrences} times. Use the session-scoped tool instead; original command results remain in the immutable session log. Example: ${candidate.command}`;
 }
 
 /** Find repeated, conservative read-only shell procedures without an LLM. */

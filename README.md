@@ -1,4 +1,4 @@
-# pi-session-tools
+# pi-procedure-crystallizer
 
 Session-scoped procedural memory for [Pi](https://pi.dev): preserve useful,
 deterministic procedures before context compaction without silently turning
@@ -27,7 +27,7 @@ execute arbitrary generated source or install dependencies silently.
 ## Install
 
 ```bash
-pi install npm:pi-session-tools
+pi install npm:pi-procedure-crystallizer
 ```
 
 Enable or inspect the package with `pi config`. To load a checkout directly:

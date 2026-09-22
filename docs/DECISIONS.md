@@ -42,4 +42,8 @@ The package ships `skills/session-tools-workflow/SKILL.md`. It tells Pi to creat
 
 ## D-010 — Discovery precedes runtime materialization
 
-Pre-compaction discovery first emits bounded, provenance-bearing candidates for repeated read-only procedures. It must not turn arbitrary shell history into executable tools. Candidate classes get dedicated safe runtimes and typed parameters in later slices; generated source execution remains disabled by default.
+Pre-compaction discovery first emits bounded, provenance-bearing candidates for repeated read-only procedures. It must not turn arbitrary shell history into executable tools without validation. Candidate classes may materialize as session-scoped generated procedures only when their implementation passes the host allowlist (no dependencies, credentials, network, shell, or destructive operations), with bounded timeout/output. Global promotion remains explicit.
+
+## D-011 — Model-assisted procedure sweep is bounded garbage collection
+
+At pre-compaction, a bounded sweep may send only recent Bash calls and bounded results to the active model to group ephemeral scripts into parameterized session-tool candidates. The response is schema-validated against observed entry IDs and implementation capabilities. The sweep does not prompt for human approval; validated candidates become session-scoped callable artifacts, while review remains available through the catalog and promotion remains explicit.
